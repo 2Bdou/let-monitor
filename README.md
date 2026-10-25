@@ -78,6 +78,28 @@ EXCLUDE_KEYWORDS=wtb,looking for,request
 
 注意逗号是分隔符，正则里不要写逗号；需要“或”时用 `|`。
 
+### 两套预设（2026-10-25 实测）
+
+**A. 中国优化线路 / 亚洲** —— 更精准，适合建站、回国线路
+
+```dotenv
+KEYWORDS=cn2,9929,cmin2,japan,tokyo,osaka,hong kong,singapore
+EXCLUDE_KEYWORDS=wtb,looking for,request
+```
+
+当前 Offers 里命中约 5 条。CN2 / 9929 本身不常出现，属于“等鱼”型；一旦有商家发，基本不会漏。
+
+**B. 存储 / 黑五** —— 更贴合 Offers 的日常节奏，适合捡便宜大盘
+
+```dotenv
+KEYWORDS=storage box,storage vps,hdd,black friday
+EXCLUDE_KEYWORDS=wtb,looking for,request
+```
+
+当前命中约 9 条，噪音比直接用 `storage` 或 `€` 小很多（`storage` 会连 NVMe 套餐一起匹配，`€` 会命中几乎所有欧洲商家）。
+
+`.env.example` 默认用 B；想换 A 只改 `KEYWORDS` / `EXCLUDE_KEYWORDS` 两行，重启服务即可，不会补发历史帖子。
+
 ## 通知网关对接
 
 请求与网关文档一致：
