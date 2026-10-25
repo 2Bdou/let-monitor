@@ -135,73 +135,71 @@ Content-Type: application/json
 
 ## 部署到 ecloudserv
 
-### 1. 推到公开仓库
+仓库：<https://github.com/2Bdou/let-monitor>（公开）。
 
-ecloudserv 的 Git 部署目前只支持公开仓库，且免费版只有 **1 个 Git 项目**。
+ecloudserv 的容器用的是 Pterodactyl 的 Python 镜像，**不需要**「Projets」里的 Git 部署功能，直接用容器自带的 `Démarrage` + `Variables` 两个标签页就够了。免费版 RAM 总额 512 MB，也就是一个 512 MB 容器。
 
-```bash
-git init
-git add .
-git commit -m "LET Offers monitor for notify-gateway"
-git branch -M main
-git remote add origin git@github.com:<你>/let-offers-monitor.git
-git push -u origin main
-```
+### 1. 容器「Démarrage」标签页
 
-不要把 `.env`、`state.json` 提交进去（`.gitignore` 已处理）。
-
-### 2. 建项目
-
-面板 → **Projets → Nouveau projet**：
-
-| 字段 | 值 |
+| 变量 | 值 |
 |---|---|
-| 仓库 | `<你>/let-offers-monitor` |
-| 分支 | `main` |
-| 容器语言 | Python |
-| 安装命令 | 留空（无依赖） |
-| 构建命令 | 留空 |
-| 启动命令 | `python main.py` |
+| Git Repo Address (`GIT_ADDRESS`) | `https://github.com/2Bdou/let-monitor` |
+| Git Branch (`BRANCH`) | `main` |
+| App py file (`PY_FILE`) | `main.py` |
+| Auto Update (`AUTO_UPDATE`) | `1` |
+| Additional Python packages (`PY_PACKAGES`) | 留空 |
+| Git Access Token (`ACCESS_TOKEN`) | 留空（公开仓库不需要） |
 
-### 3. 配环境变量
+平台据此生成启动命令，顺序是：没有 `.git` 就 clone，有就 `git pull` → `pip install -r requirements.txt`（本项目没有依赖，为空操作）→ `python main.py`。改完这些变量后点一次 **Réinstaller**（或直接重启）让代码落地。
 
-在容器的 **Variables / Secrets** 里至少填：
+镜像用 Python 3.12 即可，代码兼容 3.8+。
+
+### 2. 容器「Variables」标签页
+
+这里加的变量会**自动写进容器里的 `.env`**（文件头写着「Ne modifie pas ce fichier à la main」），代码启动时用 `load_dotenv()` 读。至少填：
 
 ```dotenv
-NOTIFY_URL=https://<你的-worker>/api/notify
-NOTIFY_TOKEN=<项目 Key>
-KEYWORDS=cn2,9929,cmin2,japan,tokyo,osaka,storage,hdd,€
-EXCLUDE_KEYWORDS=wtb,looking for
+FEED_URL=https://lowendtalk.com/categories/offers/feed.rss
+NOTIFY_URL=https://notify.cabin.ccwu.cc/api/notify
+NOTIFY_TOKEN=<网关项目 Key，勾选 secret>
+KEYWORDS=storage box,storage vps,hdd,black friday
+EXCLUDE_KEYWORDS=wtb,looking for,request
 MATCH_FIELDS=title
+BOOTSTRAP=skip
 INTERVAL_MIN=10
 MAX_PER_RUN=10
 SOURCE=let-offers
-BOOTSTRAP=skip
 STATE_FILE=state.json
 ```
 
-`PORT` 由平台注入，健康检查走 `GET /health`。这个 worker 不需要绑定域名。
+值里含空格时平台会加引号，`load_dotenv()` 会去掉，不用自己处理。改完变量必须**重启**才生效。
 
-### 4. 首次上线
+`PORT` 不用管：这个 worker 只在 `0.0.0.0:3000` 开一个 `GET /health`，不需要对外域名，容器也不占公网端口。
 
-默认 `BOOTSTRAP=skip`：第一次运行会把 Offers 现有的约 100 条全部记为已读，**不发通知**。之后只推新帖，避免一上线就被旧帖刷屏。
+### 3. 首次上线
 
-验证顺序：
+默认 `BOOTSTRAP=skip`：第一次运行会把 Offers 现有的约 100 条全部记为已读，**不发通知**，之后只推新帖。`state.json` 落在 `/home/container`，重启不丢；因为它被 `.gitignore` 忽略，`git pull` 也不会覆盖它。
 
-1. 面板终端执行 `python main.py --test-notify`，看邮件 / Telegram 是否收到测试消息；
-2. `python main.py --once --dry-run`，确认关键词能命中（会打印标题和链接）；
-3. 看日志出现 `sent N item(s), taskId=...` 即成功；
-4. 想立刻推送当前命中，可临时设 `BOOTSTRAP=notify`、`MAX_PER_RUN=5` 重启一次，再改回 `skip`。
+验证顺序（面板 `Terminal` 里执行）：
 
-### 5. 资源占用
+```bash
+cd /home/container
+python main.py --test-notify                # 网关链路，会真发一封测试邮件
+DRY_RUN=1 STATE_FILE=/tmp/dry.json python main.py --once --dry-run   # 看关键词命中
+curl -s localhost:3000/health               # 常驻进程的健康状态
+```
 
-| 项 | 大约 |
+想立刻把当前命中推一次，可把 `BOOTSTRAP` 临时改成 `notify`、`MAX_PER_RUN=5`，重启跑完再改回 `skip`。
+
+### 4. 资源占用（实测）
+
+| 项 | 实测 |
 |---|---|
-| 内存 | 30–50 MB |
-| 磁盘 | 代码 < 100 KB，`state.json` 几十 KB |
+| 内存 | 约 34 MB（`python main.py` 常驻） |
+| 磁盘 | 代码 + `.git` 约 85 KB，`state.json` 约 5 KB |
 | 出站 | 每 10 分钟 1 次 RSS（约 200 KB）+ 有命中时 1 次网关请求 |
 
-免费版 512 MB 完全够用，还可以在另一个容器里放别的东西。
+512 MB 容器绰绰有余。建议在容器设置里打开 **auto-restart**，进程异常退出时自动拉起。
 
 ## 运维与排查
 
