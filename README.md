@@ -76,29 +76,47 @@ KEYWORDS=/cn2|9929|cmin2/i,/(tokyo|osaka)/i,€
 EXCLUDE_KEYWORDS=wtb,looking for,request
 ```
 
-注意逗号是分隔符，正则里不要写逗号；需要“或”时用 `|`。
+注意逗号是分隔符，正则里不要写逗号（`{1,2}` 这类量词也不行），需要“或”时用 `|`。
 
-### 两套预设（2026-10-25 实测）
-
-**A. 中国优化线路 / 亚洲** —— 更精准，适合建站、回国线路
+**在 ecloudserv 上还有一条**：平台生成 `.env` 时会把反斜杠转义成两个，`\d` `\s` `\/` 到容器里就失效了。所以关键词里的正则不要用反斜杠，用等价写法：
 
 ```dotenv
-KEYWORDS=cn2,9929,cmin2,japan,tokyo,osaka,hong kong,singapore
-EXCLUDE_KEYWORDS=wtb,looking for,request
+# 不要写 /\$\d\d?\/year/i ，换成：
+/[^0-9][0-9][0-9]?([.][0-9][0-9])?/(year|yr)/i
 ```
 
-当前 Offers 里命中约 5 条。CN2 / 9929 本身不常出现，属于“等鱼”型；一旦有商家发，基本不会漏。
+### 当前生效的关键词（线路 / 低价 / KVM）
 
-**B. 存储 / 黑五** —— 更贴合 Offers 的日常节奏，适合捡便宜大盘
+```dotenv
+KEYWORDS=cn2,gia,9929,cmin2,cmi,4837,cuvip,hong kong,japan,tokyo,osaka,singapore,korea,seoul,taiwan,kvm,cheap,budget,low cost,lifetime,/[^0-9][0-9][0-9]?([.][0-9][0-9])?/(year|yr)/i,三网,回程,联通,电信
+EXCLUDE_KEYWORDS=wtb,looking for,request,dedicated server,object storage,mac mini,email hosting
+```
+
+- **线路**：`cn2` `gia` `9929` `cmin2` `cmi` `4837` `cuvip`（中国大陆优化线路），外加 `三网` `回程` `联通` `电信` 兜住中文标题
+- **地区**：`hong kong` `japan` `tokyo` `osaka` `singapore` `korea` `seoul` `taiwan`
+- **架构**：`kvm`
+- **低价**：`cheap` `budget` `low cost` `lifetime`，以及年付价 ≤ 99（带货币符号或空格，`€12.99/year`、`$49/yr` 都算）
+- **排除**：收机器/求推荐，以及独立服务器、对象存储、Mac mini、邮件托管这类噪音
+
+2026-10-25 实测：100 条里命中 34 条，其中约 21 条是 KVM VPS；`cn2/9929/cmin2` 当时为 0，属于“等鱼”型，留着不会误报。任一关键词命中即通知（OR）。
+
+### 备选
+
+**A. 只要中国线路 / 亚洲**（更窄，当前约 5 条）
+
+```dotenv
+KEYWORDS=cn2,gia,9929,cmin2,cmi,4837,cuvip,japan,tokyo,osaka,hong kong,singapore,taiwan
+EXCLUDE_KEYWORDS=wtb,looking for,request,dedicated server,object storage
+```
+
+**B. 存储 / 黑五**（当前约 9 条）
 
 ```dotenv
 KEYWORDS=storage box,storage vps,hdd,black friday
 EXCLUDE_KEYWORDS=wtb,looking for,request
 ```
 
-当前命中约 9 条，噪音比直接用 `storage` 或 `€` 小很多（`storage` 会连 NVMe 套餐一起匹配，`€` 会命中几乎所有欧洲商家）。
-
-`.env.example` 默认用 B；想换 A 只改 `KEYWORDS` / `EXCLUDE_KEYWORDS` 两行，重启服务即可，不会补发历史帖子。
+换哪套只改 `KEYWORDS` / `EXCLUDE_KEYWORDS` 两行再重启，不会补发历史帖子。
 
 ## 通知网关对接
 
